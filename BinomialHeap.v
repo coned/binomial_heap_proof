@@ -9,9 +9,16 @@ Inductive BinomialTree : Type :=
 Node (v:nat) | Comb (r:nat) (o:nat) (bt1:BinomialTree) (bt2:BinomialTree).
 
 Definition BinomialHeap : Type := list BinomialTree.
-Definition EmptyHeap : BinomialHeap := [].
+Definition empty_heap : BinomialHeap := [].
 
 Definition BinomialHeapOption : Type := list (option BinomialTree).
+Definition none_tree : option BinomialTree := None.
+
+Inductive sim: BinomialHeap -> BinomialHeapOption -> Prop :=
+| sim_nil: sim [] []
+| sim_some (bt:BinomialTree) (bh:BinomialHeap)
+    (bho:BinomialHeapOption) (E: sim bh bho): sim (bt::bh) ((Some bt)::bho)
+| sim_none (bh:BinomialHeap) (bho:BinomialHeapOption) (E: sim bh bho): sim bh (none_tree::bho).
 
 Fixpoint root (t:BinomialTree) :=
 match t with
@@ -29,6 +36,27 @@ Definition combineTree (bt1:BinomialTree) (bt2:BinomialTree)
 := if (root bt1) <? (root bt2)
    then Comb (root bt1) (S (order bt1)) bt1 bt2
    else Comb (root bt2) (S (order bt2)) bt2 bt1.
+(*
+Fixpoint mergeHeapOption (p: option BinomialTree) (b1 b2: BinomialHeapOption):BinomialHeapOption:=
+match p, b1, b2 with
+| None, [], _ => b2
+| None, _, [] => b1
+| Some bt, [], [] => [p]
+| Some bt, (Some h1)::t1, [] => none_tree::(mergeHeapOption (Some (combineTree bt h1)) t1 [])
+| Some bt, [], (Some h2)::t2 => none_tree::(mergeHeapOption (Some (combineTree bt h2)) [] t2)
+| Some bt, None::t1, [] => p::t1
+| Some bt, [], None::t2 => p::t2
+| _, None::t1,     None::t2 => p::(mergeHeapOption none_tree t1 t2)
+| None, (Some h1)::t1, None::t2 => (Some h1)::(mergeHeapOption none_tree t1 t2)
+| None, None::t1, (Some h2)::t2 => (Some h2)::(mergeHeapOption none_tree t1 t2)
+| _, (Some h1)::t1, (Some h2)::t2 => p::(mergeHeapOption none_tree t1 t2)
+| Some bt, (Some h1)::t1, None::t2 => none_tree::(mergeHeapOption (Some (combineTree bt h1)) t1 t2)
+| Some bt, None::t1, (Some h2)::t2 => none_tree::(mergeHeapOption (Some (combineTree bt h2)) t1 t2)
+end.
+*)
+
+
+
 
 Fixpoint mergeTree (bt:BinomialTree) (bh:BinomialHeap) : BinomialHeap :=
 match bh with
