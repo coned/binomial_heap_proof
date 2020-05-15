@@ -5,45 +5,68 @@ Require Import Coq.Sorting.Sorted.
 
 Variable INF : nat.
 
-Inductive BinomialTree : Type :=
-Node (v:nat) | Comb (r:nat) (o:nat) (bt1:BinomialTree) (bt2:BinomialTree).
+Inductive BiT : Type :=
+Node (v:nat) | Comb (bt1:BiT) (bt2:BiT).
 
-Definition BinomialHeap : Type := list BinomialTree.
-Definition empty_heap : BinomialHeap := [].
+Definition BiH : Type := list BiT.
+(*Definition empty_heap : BiH := [].*)
 
-Definition BinomialHeapOption : Type := list (option BinomialTree).
-Definition none_tree : option BinomialTree := None.
-
-Inductive sim: BinomialHeap -> BinomialHeapOption -> Prop :=
+Definition BiHO : Type := list (option BiT).
+Definition none_tree : option BiT := None.
+(*
+Inductive sim: BiH -> BiHO -> Prop :=
 | sim_nil: sim [] []
-| sim_some (bt:BinomialTree) (bh:BinomialHeap)
-    (bho:BinomialHeapOption) (E: sim bh bho): sim (bt::bh) ((Some bt)::bho)
-| sim_none (bh:BinomialHeap) (bho:BinomialHeapOption) (E: sim bh bho): sim bh (none_tree::bho).
+| sim_some (bt:BiT) (bh:BiH)
+    (bho:BiHO) (E: sim bh bho): sim (bt::bh) ((Some bt)::bho)
+| sim_none (bh:BiH) (bho:BiHO) (E: sim bh bho): sim bh (none_tree::bho).
+*)
 
-Fixpoint root (t:BinomialTree) :=
+(*
+Inductive sim : BiH -> BiHO -> nat -> Prop :=
+| sim_1 (n: nat): sim nil nil n
+| sim_2 (n: nat) (h: bt) (t: BiH) (tail: BiHO):
+    sim (h::t) tail (S n) -> sim (h::t) (None::tail) n
+| sim_3 (n: nat) (h: bt) (t: BiH) (tail: BiHO) (b: bt):
+    same b h /\ order b = n /\ sim t tail (S n) 
+    -> sim (h::t) ((Some b)::tail) n.
+*)
+
+Fixpoint root (t:BiT) :=
 match t with
 | Node v => v
-| Comb r _ _ _ => r
+| Comb bt1 _ => root bt1
 end.
 
-Fixpoint order (t:BinomialTree) :=
+Fixpoint order (t:BiT) :=
 match t with
 | Node _ => 0
-| Comb _ n _ _ => n
+| Comb bt1 _ => order bt1
 end.
 
-Definition combineTree (bt1:BinomialTree) (bt2:BinomialTree)
+Definition combineTree (bt1:BiT) (bt2:BiT)
 := if (root bt1) <? (root bt2)
-   then Comb (root bt1) (S (order bt1)) bt1 bt2
-   else Comb (root bt2) (S (order bt2)) bt2 bt1.
-(*
-Fixpoint mergeHeapOption (p: option BinomialTree) (b1 b2: BinomialHeapOption):BinomialHeapOption:=
+   then Comb bt1 bt2
+   else Comb bt2 bt1.
+
+Fixpoint mergeTreeO (bt:option BiT) (o:BiHO) : BiHO :=
+match bt with 
+| None => o
+| Some b => match o with 
+    | nil => [bt]
+    | h::t => match h with 
+        | None => bt::t
+        | Some h' => mergeTreeO (Some (combineTree h' b)) t
+        end
+    end
+end.
+
+Fixpoint mergeHeapOption (p: option BiT) (b1 b2: BiHO):BiHO:=
 match p, b1, b2 with
 | None, [], _ => b2
 | None, _, [] => b1
 | Some bt, [], [] => [p]
-| Some bt, (Some h1)::t1, [] => none_tree::(mergeHeapOption (Some (combineTree bt h1)) t1 [])
-| Some bt, [], (Some h2)::t2 => none_tree::(mergeHeapOption (Some (combineTree bt h2)) [] t2)
+| Some bt, (Some h1)::t1, [] => none_tree::(mergeTreeO (Some (combineTree bt h1)) t1)
+| Some bt, [], (Some h2)::t2 => none_tree::(mergeTreeO (Some (combineTree bt h2)) t2)
 | Some bt, None::t1, [] => p::t1
 | Some bt, [], None::t2 => p::t2
 | _, None::t1,     None::t2 => p::(mergeHeapOption none_tree t1 t2)
@@ -53,12 +76,9 @@ match p, b1, b2 with
 | Some bt, (Some h1)::t1, None::t2 => none_tree::(mergeHeapOption (Some (combineTree bt h1)) t1 t2)
 | Some bt, None::t1, (Some h2)::t2 => none_tree::(mergeHeapOption (Some (combineTree bt h2)) t1 t2)
 end.
-*)
 
 
-
-
-Fixpoint mergeTree (bt:BinomialTree) (bh:BinomialHeap) : BinomialHeap :=
+Fixpoint mergeTree (bt:BiT) (bh:BiH) : BiH :=
 match bh with
 | [] => [bt]
 | h::t => if (order bt <? order h)
@@ -68,13 +88,33 @@ match bh with
                   else h::(mergeTree bt t)
 end.
 
-Fixpoint mergeHeap (bh1:BinomialHeap) (bh2:BinomialHeap) :=
-match bh1 with
-| [] => bh2
-| h::t => mergeHeap t (mergeTree h bh2)
-end.
+Inductive state :=
+|stat: BiH->BiH->BiH->(option BiT)->state.
+
+Inductive merge_alg: state -> state -> Prop :=
+|alg_san (v:BiT) (bh1:BiH): merge_alg (stat bh1 [] [] (Some v)) (stat [] [] (mergeTree v bh1) none_tree)
+|alg_sna (v:BiT) (bh2:BiH): merge_alg (stat [] bh2 [] (Some v)) (stat [] [] (mergeTree v bh2) none_tree)
+|alg_nna (bh2:BiH): merge_alg (stat [] bh2 [] none_tree) (stat [] [] bh2 none_tree)
+|alg_nan (bh1:BiH): merge_alg (stat bh1 [] [] none_tree) (stat [] [] bh1 none_tree)
+|alg_nss0 (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (E: order h1 = order h2):
+    merge_alg (stat (h1::t1) (h2::t2) [] none_tree) (stat t1 t2 [] (Some (combineTree h1 h2)))
+|alg_nss1 (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (E: order h1 < order h2):
+    merge_alg (stat (h1::t1) (h2::t2) [] none_tree) (stat t1 (h2::t2) [h1] none_tree)
+|alg_nss2 (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (E: order h1 > order h2):
+    merge_alg (stat (h1::t1) (h2::t2) [] none_tree) (stat (h1::t1) t2 [h2] none_tree)
+|alg_sss0 (v:BiT) (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (E: order h1 = order h2):
+    merge_alg (stat (h1::t1) (h2::t2) [] (Some v)) (stat t1 t2 [v] (Some (combineTree h1 h2)))
+|alg_sss1 (v:BiT) (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (E0: ~ order h1 = order h2) (E1: order v = order h1):
+    merge_alg (stat (h1::t1) (h2::t2) [] (Some v)) (stat t1 (h2::t2) [] (Some (combineTree v h1)))
+|alg_sss2 (v:BiT) (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH)
+          (E0: ~ order h1 = order h2) (E1: ~ order v = order h1) (E2: order v = order h2):
+    merge_alg (stat (h1::t1) (h2::t2) [] (Some v)) (stat (h1::t1) t2 [] (Some (combineTree v h2)))
+|alg_sss3 (v:BiT) (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH)
+          (E0: ~ order h1 = order h2) (E1: ~ order v = order h1) (E2: ~ order v = order h2):
+    merge_alg (stat (h1::t1) (h2::t2) [] (Some v)) (stat (h1::t1) (h2::t2) [v] none_tree).
+
 (*
-Fixpoint mergeHeap' (p:option BinomialTree) (bh1:BinomialHeap) (bh2:BinomialHeap) :=
+Fixpoint mergeHeap' (p:option BiT) (bh1:BiH) (bh2:BiH) :=
 match p, bh1, bh2 with
 | None, [], [] => []
 | Some v, _,[] => mergeTree v bh1
@@ -95,71 +135,71 @@ match p, bh1, bh2 with
                                     else v::(mergeHeap' None bh1 bh2)
 end.
 *)
-Definition insert (v:nat) (bh:BinomialHeap) : BinomialHeap := mergeTree (Node v) bh.
 
-Fixpoint findMin (bh:BinomialHeap) :=
+Definition insert (v:nat) (bh:BiH) : BiH := mergeTree (Node v) bh.
+
+Fixpoint findMin (bh:BiH) :=
 match bh with
 | [] => INF
 | t::h => min (root t) (findMin h)
 end.
-
-Fixpoint delMinInTree (bt:BinomialTree) :=
+(*
+Fixpoint delMinInTree (bt:BiT) :=
 match bt with
 | Node _ => []
 | Comb _ _ bt1 bt2 => delMinInTree bt1 ++ [bt2]
 end.
 
-Fixpoint delMin (bh:BinomialHeap) :=
+Fixpoint delMin (bh:BiH) :=
 match bh with
 | [] => (INF, [])
 | t::h => if (root t) <? (fst (delMin h))
           then (root t, mergeHeap (delMinInTree t) h)
           else (fst (delMin h), t::(snd (delMin h)))
 end.
+*)
 
-Inductive minHeap : BinomialTree -> Prop :=
-| Heap_0 (v:nat) : minHeap (Node v)
-| Heap_n (o:nat) (t1: BinomialTree) (t2:BinomialTree)
-         (E1: minHeap t1) (E2: minHeap t2) (E3: root t1 < root t2) :
-minHeap (Comb o (root t1) t1 t2).
+Inductive minHeap : BiT -> Prop :=
+| Heap_0 (v: nat) : minHeap (Node v)
+| Heap_n (t1: BiT) (t2: BiT) (E1: minHeap t1) (E2: minHeap t2) (E3: root t1 < root t2) :
+        minHeap (Comb t1 t2).
 
-
-Inductive orderEq : BinomialTree -> Prop :=
+Inductive orderEq : BiT -> Prop :=
 | OE_0 (v:nat) : orderEq (Node v)
-| OE_n (r:nat) (t1: BinomialTree) (t2:BinomialTree) (E1: orderEq t1) (E2: orderEq t2)
-       (E3: order t1 = order t2) : orderEq (Comb (S (order t1)) r t1 t2).
+| OE_n (t1: BiT) (t2: BiT) (E1: orderEq t1) (E2: orderEq t2)
+       (E3: order t1 = order t2) : orderEq (Comb t1 t2).
 
-Definition BT (bt:BinomialTree) := minHeap bt /\ orderEq bt.
+Definition BiTrue (bt:BiT) := minHeap bt /\ orderEq bt.
 
-Definition orderBT (bt1:BinomialTree) (bt2:BinomialTree) := lt (order bt1) (order bt2).
+Definition orderBiT (bt1:BiT) (bt2:BiT) := lt (order bt1) (order bt2).
+Definition orderedList (bh:BiH) := StronglySorted orderBiT bh.
 
-Definition orderedList' (bh:BinomialHeap) := StronglySorted orderBT bh.
 (*maybe not every useful*)
-
-Inductive orderedList : BinomialHeap -> Prop :=
+(*
+Inductive orderedList : BiH -> Prop :=
 | OL_nil : orderedList []
-| OL_one (bt: BinomialTree) : orderedList [bt]
-| OL_more (bt1:BinomialTree) (bt2:BinomialTree) (bh_tail:BinomialHeap)
+| OL_one (bt: BiT) : orderedList [bt]
+| OL_more (bt1:BiT) (bt2:BiT) (bh_tail:BiH)
           (E1: orderedList (bt2::bh_tail))
-          (E2:order bt1 < order bt2) : orderedList (bt1::bt2::bh_tail).
+          (E2:order bt1 < order bt2) : orderedList (bt1::bt2::bh_tail).*)
 
-Definition everyBT (bh: BinomialHeap) := Forall BT bh.
+Definition everyBiT (bh: BiH) := Forall BiTrue bh.
 
-Definition BH (bh:BinomialHeap) := orderedList bh /\ everyBT bh.
+Definition BiH (bh:BiH) := orderedList bh /\ everyBiT bh.
 
-Theorem combine_binomial_tree: forall (t1 t2: BinomialTree),
-BT t1 /\ BT t2 /\ (order t1) = (order t2)
--> BT (combineTree t1 t2) /\ (order (combineTree t1 t2)) = S (order t2).
+Theorem combine_binomial_tree: forall (t1 t2: BiT),
+BiT t1 /\ BiT t2 /\ (order t1) = (order t2)
+-> BiT (combineTree t1 t2) /\ (order (combineTree t1 t2)) = S (order t2).
 Proof. Admitted.
 
-Theorem mergeTree_is_BH: forall (bt: BinomialTree) (bh: BinomialHeap), BT bt ->
-BH bh -> BH (mergeTree bt bh).
+Theorem mergeTree_is_BiH: forall (bt: BiT) (bh: BiH), BiT bt ->
+BiH bh -> BiH (mergeTree bt bh).
 Proof. Admitted.
 
-Theorem insert_is_BH: forall (v:nat) (bh:BinomialHeap), BH bh -> BH (insert v bh).
+Theorem insert_is_BiH: forall (v:nat) (bh:BiH), BiH bh -> BiH (insert v bh).
 Proof. Admitted.
 
-Theorem delMin_is_BH: forall (bh:BinomialHeap), BH bh -> BH (snd (delMin bh)).
+Theorem delMin_is_BiH: forall (bh:BiH), BiH bh -> BiH (snd (delMin bh)).
 Proof. Admitted.
 
 
