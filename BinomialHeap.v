@@ -2,6 +2,8 @@ Require Import List.
 Import ListNotations.
 Import Nat.
 Require Import Coq.Sorting.Sorted.
+Require Import Relation_Definitions.
+Import Coq.Relations.Relation_Operators.
 
 Variable INF : nat.
 
@@ -13,23 +15,6 @@ Definition BiH : Type := list BiT.
 
 Definition BiHO : Type := list (option BiT).
 Definition none_tree : option BiT := None.
-(*
-Inductive sim: BiH -> BiHO -> Prop :=
-| sim_nil: sim [] []
-| sim_some (bt:BiT) (bh:BiH)
-    (bho:BiHO) (E: sim bh bho): sim (bt::bh) ((Some bt)::bho)
-| sim_none (bh:BiH) (bho:BiHO) (E: sim bh bho): sim bh (none_tree::bho).
-*)
-
-(*
-Inductive sim : BiH -> BiHO -> nat -> Prop :=
-| sim_1 (n: nat): sim nil nil n
-| sim_2 (n: nat) (h: bt) (t: BiH) (tail: BiHO):
-    sim (h::t) tail (S n) -> sim (h::t) (None::tail) n
-| sim_3 (n: nat) (h: bt) (t: BiH) (tail: BiHO) (b: bt):
-    same b h /\ order b = n /\ sim t tail (S n) 
-    -> sim (h::t) ((Some b)::tail) n.
-*)
 
 Fixpoint root (t:BiT) :=
 match t with
@@ -47,6 +32,20 @@ Definition combineTree (bt1:BiT) (bt2:BiT)
 := if (root bt1) <? (root bt2)
    then Comb bt1 bt2
    else Comb bt2 bt1.
+
+Inductive sim_order: BiH -> BiHO -> Prop :=
+| simo_nil: sim_order [] []
+| simo_some (bt:BiT) (bh:BiH)
+    (bho:BiHO) (E: sim_order bh bho): sim_order (bt::bh) ((Some bt)::bho)
+| simo_none (bh:BiH) (bho:BiHO) (E: sim_order bh bho): sim_order bh (none_tree::bho).
+
+Inductive sim_place (n:nat) : BiHO -> Prop :=
+| simp_nil: sim_place n []
+| simp_none (bho:BiHO) (E: sim_place (S n) bho): sim_place (n) (none_tree::bho)
+| simp_some (bt:BiT) (bho:BiHO) (E0: sim_place (S n) bho) (E1: order bt = n):
+      sim_place n ((Some bt)::bho).
+
+Definition sim (bh: BiH) (bho: BiHO) := (sim_order bh bho) /\ (sim_place 0 bho).
 
 Fixpoint mergeTreeO (bt:option BiT) (o:BiHO) : BiHO :=
 match bt with 
@@ -174,33 +173,56 @@ Definition BiTrue (bt:BiT) := minHeap bt /\ orderEq bt.
 Definition orderBiT (bt1:BiT) (bt2:BiT) := lt (order bt1) (order bt2).
 Definition orderedList (bh:BiH) := StronglySorted orderBiT bh.
 
-(*maybe not every useful*)
-(*
-Inductive orderedList : BiH -> Prop :=
-| OL_nil : orderedList []
-| OL_one (bt: BiT) : orderedList [bt]
-| OL_more (bt1:BiT) (bt2:BiT) (bh_tail:BiH)
-          (E1: orderedList (bt2::bh_tail))
-          (E2:order bt1 < order bt2) : orderedList (bt1::bt2::bh_tail).*)
-
 Definition everyBiT (bh: BiH) := Forall BiTrue bh.
 
-Definition BiH (bh:BiH) := orderedList bh /\ everyBiT bh.
-
+Definition BiHTure (bh:BiH) := orderedList bh /\ everyBiT bh.
+(*
 Theorem combine_binomial_tree: forall (t1 t2: BiT),
-BiT t1 /\ BiT t2 /\ (order t1) = (order t2)
--> BiT (combineTree t1 t2) /\ (order (combineTree t1 t2)) = S (order t2).
+BiTrue t1 /\ BiTrue t2 /\ (order t1) = (order t2)
+-> BiTrue (combineTree t1 t2) /\ (order (combineTree t1 t2)) = S (order t2).
 Proof. Admitted.
 
-Theorem mergeTree_is_BiH: forall (bt: BiT) (bh: BiH), BiT bt ->
-BiH bh -> BiH (mergeTree bt bh).
+
+Theorem mergeTree_is_BiH: forall (bt: BiT) (bh: BiH), BiTrue bt ->
+BiHTrue bh -> BiHTrue (mergeTree bt bh).
 Proof. Admitted.
+
 
 Theorem insert_is_BiH: forall (v:nat) (bh:BiH), BiH bh -> BiH (insert v bh).
 Proof. Admitted.
 
 Theorem delMin_is_BiH: forall (bh:BiH), BiH bh -> BiH (snd (delMin bh)).
 Proof. Admitted.
+*)
+
+Check clos_refl_trans.
+
+Theorem merge_alg_remain_correct: forall (p1 p2: option BiT) (a1 b1 a2 b2 c:BiH)
+(a1' b1' a2' b2' c':BiHO) (s s1 s2:state),
+  s1 = stat a1 b1 nil p1 ->
+  s2 = stat a2 b2 nil p2 ->
+  s = stat nil nil c none_tree ->
+  merge_alg s1 s2 ->
+  sim a1 a1' ->
+  sim b1 b1' ->
+  sim a2 a2' ->
+  sim b2 b2' ->
+  sim c c' ->
+  c' = mergeHeapOption p1 a1' b1' /\ c' = mergeHeapOption p2 a2' b2'.
+
+Theorem merge_alg_correct: forall (a b c:BiH) (a' b' c':BiHO) (s1 s2:state),
+  s1 = stat a b nil none_tree ->
+  s2 = stat nil nil c none_tree ->
+  clos_refl_trans state merge_alg s1 s2 ->
+  sim a a' ->
+  sim b b' ->
+  sim c c' ->
+  c' = mergeHeapOption none_tree a' b'.
+Proof.
+intros a b c a' b' c' s1 s2.
+unfold sim in *.
+intros Es1 Es2 H0 [Ha1 Ha2] [Hb1 Hb2] [Hc1 Hc2].
+
 
 
 
