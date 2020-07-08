@@ -11,7 +11,7 @@ Inductive BiT : Type :=
 Node (v:nat) | Comb (bt1:BiT) (bt2:BiT).
 
 Definition BiH : Type := list BiT.
-(*Definition empty_heap : BiH := [].*)
+Definition empty_heap : BiH := [].
 
 Definition BiHO : Type := list (option BiT).
 Definition none_tree : option BiT := None.
@@ -45,7 +45,15 @@ Inductive sim_place (n:nat) : BiHO -> Prop :=
 | simp_some (bt:BiT) (bho:BiHO) (E0: sim_place (S n) bho) (E1: order bt = n):
       sim_place n ((Some bt)::bho).
 
-Definition sim (bh: BiH) (bho: BiHO) := (sim_order bh bho) /\ (sim_place 0 bho).
+Inductive sim_high_some : BiHO -> Prop :=
+| high_one (bt:BiT): sim_high_some [(Some bt)]
+| high_more (p:option BiT) (bho:BiHO) (E: sim_high_some bho): sim_high_some (p::bho).
+
+Inductive sim_high : BiHO -> Prop := 
+| high_nil : sim_high []
+| high_some (bho:BiHO) (E: sim_high_some bho) : sim_high bho.
+
+Definition sim (bh: BiH) (bho: BiHO) := (sim_order bh bho) /\ (sim_place 0 bho) /\ (sim_high bho).
 
 Fixpoint mergeTreeO (bt:option BiT) (o:BiHO) : BiHO :=
 match bt with 
@@ -71,7 +79,7 @@ match p, b1, b2 with
 | _, None::t1,     None::t2 => p::(mergeHeapOption none_tree t1 t2)
 | None, (Some h1)::t1, None::t2 => (Some h1)::(mergeHeapOption none_tree t1 t2)
 | None, None::t1, (Some h2)::t2 => (Some h2)::(mergeHeapOption none_tree t1 t2)
-| _, (Some h1)::t1, (Some h2)::t2 => p::(mergeHeapOption none_tree t1 t2)
+| _, (Some h1)::t1, (Some h2)::t2 => p::(mergeHeapOption (Some (combineTree h1 h2)) t1 t2)
 | Some bt, (Some h1)::t1, None::t2 => none_tree::(mergeHeapOption (Some (combineTree bt h1)) t1 t2)
 | Some bt, None::t1, (Some h2)::t2 => none_tree::(mergeHeapOption (Some (combineTree bt h2)) t1 t2)
 end.
@@ -91,26 +99,31 @@ Inductive state :=
 |stat: BiH->BiH->BiH->(option BiT)->state.
 
 Inductive merge_alg: state -> state -> Prop :=
-|alg_san (v:BiT) (bh1:BiH): merge_alg (stat bh1 [] [] (Some v)) (stat [] [] (mergeTree v bh1) none_tree)
-|alg_sna (v:BiT) (bh2:BiH): merge_alg (stat [] bh2 [] (Some v)) (stat [] [] (mergeTree v bh2) none_tree)
-|alg_nna (bh2:BiH): merge_alg (stat [] bh2 [] none_tree) (stat [] [] bh2 none_tree)
-|alg_nan (bh1:BiH): merge_alg (stat bh1 [] [] none_tree) (stat [] [] bh1 none_tree)
-|alg_nss0 (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (E: order h1 = order h2):
-    merge_alg (stat (h1::t1) (h2::t2) [] none_tree) (stat t1 t2 [] (Some (combineTree h1 h2)))
-|alg_nss1 (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (E: order h1 < order h2):
-    merge_alg (stat (h1::t1) (h2::t2) [] none_tree) (stat t1 (h2::t2) [h1] none_tree)
-|alg_nss2 (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (E: order h1 > order h2):
-    merge_alg (stat (h1::t1) (h2::t2) [] none_tree) (stat (h1::t1) t2 [h2] none_tree)
-|alg_sss0 (v:BiT) (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (E: order h1 = order h2):
-    merge_alg (stat (h1::t1) (h2::t2) [] (Some v)) (stat t1 t2 [v] (Some (combineTree h1 h2)))
-|alg_sss1 (v:BiT) (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (E0: ~ order h1 = order h2) (E1: order v = order h1):
-    merge_alg (stat (h1::t1) (h2::t2) [] (Some v)) (stat t1 (h2::t2) [] (Some (combineTree v h1)))
-|alg_sss2 (v:BiT) (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH)
+|alg_san (v:BiT) (bh1:BiH) (c:BiH):
+    merge_alg (stat bh1 [] c (Some v)) (stat [] [] (c ++ (mergeTree v bh1)) none_tree)
+|alg_sna (v:BiT) (bh2:BiH) (c:BiH):
+    merge_alg (stat [] bh2 c (Some v)) (stat [] [] (c ++ (mergeTree v bh2)) none_tree)
+|alg_nna (bh2:BiH) (c:BiH):
+    merge_alg (stat [] bh2 c none_tree) (stat [] [] (c ++ bh2) none_tree)
+|alg_nan (bh1:BiH) (c:BiH):
+    merge_alg (stat bh1 [] c none_tree) (stat [] [] (c ++ bh1) none_tree)
+|alg_nss0 (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (c:BiH) (E: order h1 = order h2):
+    merge_alg (stat (h1::t1) (h2::t2) c none_tree) (stat t1 t2 c (Some (combineTree h1 h2)))
+|alg_nss1 (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (c:BiH) (E: order h1 < order h2):
+    merge_alg (stat (h1::t1) (h2::t2) c none_tree) (stat t1 (h2::t2) (c ++ [h1]) none_tree)
+|alg_nss2 (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (c:BiH) (E: order h1 > order h2):
+    merge_alg (stat (h1::t1) (h2::t2) c none_tree) (stat (h1::t1) t2 (c ++ [h2]) none_tree)
+|alg_sss0 (v:BiT) (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (c:BiH) (E: order h1 = order h2):
+    merge_alg (stat (h1::t1) (h2::t2) c (Some v)) (stat t1 t2 (c ++ [v]) (Some (combineTree h1 h2)))
+|alg_sss1 (v:BiT) (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (c:BiH)
+          (E0: ~ order h1 = order h2) (E1: order v = order h1):
+    merge_alg (stat (h1::t1) (h2::t2) c (Some v)) (stat t1 (h2::t2) c (Some (combineTree v h1)))
+|alg_sss2 (v:BiT) (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (c:BiH)
           (E0: ~ order h1 = order h2) (E1: ~ order v = order h1) (E2: order v = order h2):
-    merge_alg (stat (h1::t1) (h2::t2) [] (Some v)) (stat (h1::t1) t2 [] (Some (combineTree v h2)))
-|alg_sss3 (v:BiT) (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH)
+    merge_alg (stat (h1::t1) (h2::t2) c (Some v)) (stat (h1::t1) t2 c (Some (combineTree v h2)))
+|alg_sss3 (v:BiT) (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (c:BiH)
           (E0: ~ order h1 = order h2) (E1: ~ order v = order h1) (E2: ~ order v = order h2):
-    merge_alg (stat (h1::t1) (h2::t2) [] (Some v)) (stat (h1::t1) (h2::t2) [v] none_tree).
+    merge_alg (stat (h1::t1) (h2::t2) c (Some v)) (stat (h1::t1) (h2::t2) (c ++ [v]) none_tree).
 
 (*
 Fixpoint mergeHeap' (p:option BiT) (bh1:BiH) (bh2:BiH) :=
@@ -197,18 +210,82 @@ Proof. Admitted.
 
 Check clos_refl_trans.
 
-Theorem merge_alg_remain_correct: forall (p1 p2: option BiT) (a1 b1 a2 b2 c:BiH)
-(a1' b1' a2' b2' c':BiHO) (s s1 s2:state),
+Theorem merge_to_empty: forall (v:BiT) (a1 : BiH), mergeTree v a1 = [] -> False.
+Proof.
+intros.
+generalize dependent v.
+induction a1.
+- intros. inversion H.
+- intros. inversion H.
+  destruct (order v <? order a).
+  + inversion H1.
+  + destruct (order v =? order a).
+    * apply IHa1 in H1. apply H1.
+    * inversion H1.
+Qed.
+
+Theorem sim_empty: forall (bh : BiHO), sim [] bh -> bh = [].
+Admitted.
+
+Theorem merge_alg_remain_correct: forall (p1 p2: option BiT) (a1 b1 a2 b2:BiH)
+(a1' b1' a2' b2':BiHO) (s1 s2:state),
   s1 = stat a1 b1 nil p1 ->
   s2 = stat a2 b2 nil p2 ->
-  s = stat nil nil c none_tree ->
   merge_alg s1 s2 ->
   sim a1 a1' ->
   sim b1 b1' ->
   sim a2 a2' ->
   sim b2 b2' ->
-  sim c c' ->
-  c' = mergeHeapOption p1 a1' b1' /\ c' = mergeHeapOption p2 a2' b2'.
+  mergeHeapOption p1 a1' b1' = mergeHeapOption p2 a2' b2'.
+Proof.
+intros p1 p2 a1 b1 a2 b2 a1' b1' a2' b2' s1 s2.
+intros H1 H2 H3 H4 H5 H6 H7.
+rewrite H1 in H3. rewrite H2 in H3.
+inversion H3.
+- apply merge_to_empty in H13. destruct H13.
+- apply merge_to_empty in H13. destruct H13.
+- rewrite <- H0 in H4. rewrite H13 in H5.
+  rewrite <- H in H6. rewrite <- H12 in H7.
+  apply sim_empty in H4.
+  apply sim_empty in H5.
+  apply sim_empty in H6.
+  apply sim_empty in H7.
+  rewrite H4. rewrite H5. rewrite H6. rewrite H7. reflexivity.
+- rewrite H13 in H4. rewrite <- H8 in H5.
+  rewrite <- H in H6. rewrite <- H12 in H7.
+  apply sim_empty in H4.
+  apply sim_empty in H5.
+  apply sim_empty in H6.
+  apply sim_empty in H7.
+  rewrite H4. rewrite H5. rewrite H6. rewrite H7. reflexivity.
+- 
+
+Admitted.
+
+Theorem merge_alg_sing: forall (a b c : BiH) (a' b' c' : BiHO)
+(x y : state),
+x = stat a b [] none_tree ->
+y = stat [] [] c none_tree ->
+merge_alg x y ->
+sim a a' ->
+sim b b' ->
+sim c c' ->
+c' = mergeHeapOption none_tree a' b'.
+Proof.
+intros.
+destruct H1.
+- discriminate H.
+- discriminate H.
+- inversion H.
+  inversion H0.
+  Admitted.
+
+Theorem sim_empty_heap: forall (a : BiHO), sim empty_heap a -> a = [].
+Proof.
+  intros a [H1 [H2 H3]].
+  inversion H1.
+  - reflexivity.
+  - Admitted.
 
 Theorem merge_alg_correct: forall (a b c:BiH) (a' b' c':BiHO) (s1 s2:state),
   s1 = stat a b nil none_tree ->
@@ -220,8 +297,21 @@ Theorem merge_alg_correct: forall (a b c:BiH) (a' b' c':BiHO) (s1 s2:state),
   c' = mergeHeapOption none_tree a' b'.
 Proof.
 intros a b c a' b' c' s1 s2.
-unfold sim in *.
-intros Es1 Es2 H0 [Ha1 Ha2] [Hb1 Hb2] [Hc1 Hc2].
+intros Es1 Es2 H0 Ha Hb Hc.
+induction H0.
+- apply (merge_alg_sing a b c _ _ _ x y).
+  auto. auto. auto. auto. auto. auto.
+- rewrite Es2 in Es1.
+  inversion Es1.
+  rewrite <- H0 in Ha.
+  rewrite <- H1 in Hb.
+  rewrite -> H2 in Hc.
+  apply sim_empty_heap in Ha.
+  apply sim_empty_heap in Hb.
+  apply sim_empty_heap in Hc.
+  rewrite Ha. rewrite Hb. rewrite Hc.
+  simpl. reflexivity.
+- 
 
 
 
