@@ -124,7 +124,7 @@ Inductive merge_alg: state -> state -> Prop :=
 |alg_sss3 (v:BiT) (h1:BiT) (h2:BiT) (t1:BiH) (t2:BiH) (c:BiH)
           (E0: ~ order h1 = order h2) (E1: ~ order v = order h1) (E2: ~ order v = order h2):
     merge_alg (stat (h1::t1) (h2::t2) c (Some v)) (stat (h1::t1) (h2::t2) (c ++ [v]) none_tree).
-
+(* c ++ [v] : p1: xing zhi bao cun le dao tong yang de zhong dian, p2: xing zhi hai shi liang hao*)
 (*
 Fixpoint mergeHeap' (p:option BiT) (bh1:BiH) (bh2:BiH) :=
 match p, bh1, bh2 with
@@ -225,7 +225,23 @@ induction a1.
 Qed.
 
 Theorem sim_empty: forall (bh : BiHO), sim [] bh -> bh = [].
+Proof.
+intros.
+inversion H.
+inversion H1.
+inversion H3.
+- reflexivity.
+- inversion E.
+  + rewrite <- H5 in H0.
+    inversion H0.
+  + Admitted.
+
+Theorem sim_app: forall (bt: BiT) (bh0 bh1: BiH) (bho0: BiHO),
+sim bh0 bho0 -> bh0 = bt :: bh1 ->
+exists (bho1:BiHO), bho0 = (Some bt) :: bho1.
+Proof.
 Admitted.
+
 
 Theorem merge_alg_remain_correct: forall (p1 p2: option BiT) (a1 b1 a2 b2:BiH)
 (a1' b1' a2' b2':BiHO) (s1 s2:state),
@@ -258,8 +274,13 @@ inversion H3.
   apply sim_empty in H6.
   apply sim_empty in H7.
   rewrite H4. rewrite H5. rewrite H6. rewrite H7. reflexivity.
-- 
-
+- rewrite <- H in H3. rewrite <- H12 in H3.
+  rewrite <- H0 in H3. rewrite <- H8 in H3.
+  rewrite <- H10 in H3. rewrite <- H13 in H3.
+  symmetry in H0. symmetry in H8.
+  apply (sim_app _ _ _ a1') in H0.
+  apply (sim_app _ _ _ b1') in H8.
+  
 Admitted.
 
 Theorem merge_alg_sing: forall (a b c : BiH) (a' b' c' : BiHO)
@@ -287,6 +308,19 @@ Proof.
   - reflexivity.
   - Admitted.
 
+Theorem merge_alg_correct: forall (a b c d e f:BiH) (a' b' c' d' e' f':BiHO) (t1 t2:option BiT) 
+(s1 s2:state),
+  s1 = stat a b c t1 ->
+  s2 = stat d e f t2 ->
+  clos_refl_trans state merge_alg s1 s2 ->
+  sim a a' ->
+  sim b b' ->
+  sim c c' ->
+  sim d d' ->
+  sim e e' ->
+  sim f f' ->
+  f' ++ (mergeHeapOption t2 d' e') = c' ++ (mergeHeapOption t1 a' b').
+
 Theorem merge_alg_correct: forall (a b c:BiH) (a' b' c':BiHO) (s1 s2:state),
   s1 = stat a b nil none_tree ->
   s2 = stat nil nil c none_tree ->
@@ -312,7 +346,7 @@ induction H0.
   rewrite Ha. rewrite Hb. rewrite Hc.
   simpl. reflexivity.
 - 
-
+Admitted.
 
 
 
