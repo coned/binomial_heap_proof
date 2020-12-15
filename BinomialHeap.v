@@ -352,7 +352,111 @@ Admitted.
 
 
 
+(* commited by wyc *)
 
+Inductive BTL: BiT -> list nat -> Prop :=
+| a1 (v: nat): BTL (Node v) [v]
+| an (bt1 bt2: BiT) (l1 l2: list nat) (E1: BTL bt1 l1) (E2: BTL bt2 l2): 
+      BTL (Comb bt1 bt2) (l1 ++ l2).
+
+Inductive BTOL: BiTO -> list nat -> Prop :=
+| anone : BTOL none_tree nil
+| asome (bt: BiT) (l: list nat) (E: BTL bt l) : BTOL (Some bt) l.
+
+Inductive BHL: BiHO -> list nat -> Prop :=
+| a0: BHL empty_heapo nil
+| acoin (bto: BiTO) (bh: BiHO) (h t: list nat) (E1: BHL bh t) (E2: BTOL bto h): 
+      BHL (bto::bh) (h ++ t).
+
+Lemma merge_is: forall (A B: BiT) (a b: list nat),
+order A = order B ->
+BTL A a ->
+BTL B b ->
+BTL (combineTree A B) (a ++ b).
+Proof.
+Admitted.
+
+Lemma merge_true: forall (A: BiTO) (B: BiHO) (a b: list nat),
+BTOL A a ->
+BHL B b ->
+BHL (mergeTreeO A B) (a ++ b).
+Proof.
+Admitted.
+
+Fixpoint inserts (i:nat) (l: list nat) := 
+  match l with
+  | nil => i::nil
+  | h::t => if i <=? h then i::h::t else h :: inserts i t
+ end.
+
+Fixpoint sort (l: list nat) : list nat :=
+  match l with
+  | nil => nil
+  | h::t => inserts h (sort t)
+end.
+
+Lemma c: forall (a: BiT) (h h0: list nat),
+BTL a h ->
+BTL a h0 ->
+h = h0.
+Proof.
+induction a. 
+- intros. inversion H. inversion H0. auto.
+- intros. inversion H. inversion H0. 
+  assert (HH: l1 = l0). { apply IHa1. auto. auto. } rewrite <- HH in *.
+  assert (HHH: l2 = l3). { apply IHa2. auto. auto. } rewrite <- HHH in *.
+auto. Qed.
+ 
+Lemma d: forall (h0: list nat),
+BTOL none_tree h0 ->
+h0 = nil.
+Proof.
+intros. inversion H.
+auto. Qed.
+
+Lemma dd: forall (a: list nat),
+BHL nil a -> a = nil.
+Proof.
+intros. inversion H.
+- auto.
+Qed.
+
+Lemma dddd: forall (a: BiTO) (h h0: list nat), 
+BTOL a h ->
+BTOL a h0 ->
+h = h0.
+Proof.
+induction a.
+- intros. inversion H. inversion H0. apply c with a. auto. auto.
+- intros. apply d in H. apply d in H0. rewrite H, H0 in *. auto.
+Qed.
+
+Lemma ddd: forall (B: BiHO) (b l: list nat), 
+BHL B b ->
+BHL B l ->
+b = l.
+Proof.
+induction B. 
+- intros. inversion H.
++ apply dd in H0. auto.
+- intros. inversion H.
++ inversion H0.
+  assert (HH: t = t0). { apply IHB. auto. auto. } rewrite <- HH in *.
+  assert (HHH: h = h0). { apply dddd with a. auto. auto. } rewrite <- HHH in *.
+auto. Qed.
+
+Lemma merge_correct: forall (A B: BiHO) (a b l: list nat),
+BHL A a -> 
+BHL B b ->
+BHL (mergeHeapO none_tree A B) l ->
+sort l = sort (a ++ b).
+Proof.
+induction A. 
+- intros. simpl in H1. apply dd in H. rewrite H in *. simpl. assert(Hy: b = l). 
+  { apply ddd with B. auto. auto. } rewrite Hy in *. auto.
+- intros. inversion H0.
++
+Admitted.
 
 
 
